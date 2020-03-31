@@ -308,3 +308,99 @@ void init(){
     SQTail.store(newTail);
 }
 
+
+// =========================
+//
+//       Testing
+//
+// =========================
+
+#include <chrono>
+#include <thread> 
+#include <stdio.h> 
+#include <stdlib.h>   
+#include <time.h> 
+#include <cstddef>
+
+void performBatch(int** values, int numOps) {
+	for(int i = 0; i < numOps; i++) {
+		switch(rand() % 2) {
+			case 0:
+				futureDeq();
+				break;
+			case 1:
+				futureEnq(values[rand() % 10]);
+				break;
+		}
+	}
+	execute();
+}
+
+void test(int** values, int numOpsPerThread, int numOpsPerBatch) {
+	for(int i = 0; i < numOpsPerThread; i++) {
+		int operation = rand() % 4;
+		int* value = values[rand() % 10];
+		switch(rand() % 4) {
+			case 0:
+				enqueue(value);
+				break;
+			case 1:
+				dequeue();
+				break;
+			case 2:
+				performBatch(values, numOpsPerBatch);
+				break;
+		}
+	}
+	return;
+}
+
+double runTest(const int numThreads, int numOpsPerThread, int numOpsPerBatch) {
+
+	const int valNum = 10;
+// 	const int numThreads = 4;
+	
+	auto start = std::chrono::high_resolution_clock::now();
+	
+	init();
+	resetThread();
+
+	int* values[valNum];
+	for(int i = 0; i < valNum; i++) {
+		values[i] = new int((i+1) * 10);
+	}
+	for(int i = 0; i < 100; i++) {
+		enqueue(values[rand()%10]);
+	}
+
+	std::thread threads[numThreads];
+	for(int i = 0; i < numThreads; i++) {
+		threads[i] = std::thread(test, values, numOpsPerThread, numOpsPerBatch);
+	}
+	for(int i = 0; i < numThreads; i++) {
+		threads[i].join();
+	}
+
+	auto end = std::chrono::high_resolution_clock::now();
+
+	double time_taken =
+		std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
+              
+	return time_taken;
+}
+
+int main(void) {
+    srand(time(NULL));
+    const int averageOver = 10;
+    const int threadCounts[] = {1, 2, 3, 4};
+    const int numTests = 4; // must be length of above array
+    double temp;
+    int t, i;
+    
+    for (t = 0; t < numTests; t++) {
+        temp = 0;
+        for (i = 0; i < averageOver; i++)
+            temp += runTest(threadCounts[t], 75, 10) / (double)averageOver;
+        std::cout << threadCounts[t] << ":" << std::fixed << temp << std::endl;
+    }
+}
