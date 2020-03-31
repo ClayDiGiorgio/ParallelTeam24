@@ -147,7 +147,7 @@ void* DequeueFromShared(){
     while(true){
         PtrCnt headAndCnt = HelpAnnAndGetHead();
         Node* headNextNode = headAndCnt.node->next;
-        if (headNextNode = NULL)
+        if (headNextNode == NULL)
             return NULL;
         PtrCnt newHead {headNextNode,headAndCnt.cnt + 1};
         PtrCntOrAnn oldHead = toPtr(headAndCnt);
@@ -158,8 +158,10 @@ void* DequeueFromShared(){
 PtrCnt HelpAnnAndGetHead(){
     while (true){
         PtrCntOrAnn head = SQHead.load();
-        if (head.container.tag & 1 == 0)
+        
+        if ((head.container.tag & 1) == 0)
             return head.ptrCnt;
+        
         ExecuteAnn(head.container.ann);
     }
 }
@@ -207,14 +209,13 @@ void ExecuteAnn(Ann* ann){
     PtrCntOrAnn oldTail = toPtr(annOldTailAndCnt);
     SQTail.CAS(oldTail,toPtr(newTailAndCnt));
     UpdateHead(ann);
-    
-    
 }
 
 void UpdateHead(Ann* ann){
+   
     uint oldQueueSize = ann->oldTail.cnt - ann->oldHead.cnt;
     uint successfulDeqsNum = ann->batchReq.deqsNum;
-
+   
     Node* newHeadNode;
     
     if (ann->batchReq.excessDeqsNum > oldQueueSize)
@@ -224,12 +225,12 @@ void UpdateHead(Ann* ann){
         PtrCntOrAnn newHead = toPtr(ann->oldHead);
         SQHead.CAS(ptrAnn,newHead);
         return;
-    }
+    } 
     if(oldQueueSize > successfulDeqsNum)
         newHeadNode = GetNthNode(ann->oldHead.node,successfulDeqsNum);
-    else
+    else{
         newHeadNode = GetNthNode(ann->oldTail.node,successfulDeqsNum - oldQueueSize);
-
+    }
     PtrCnt newHead {newHeadNode,ann->oldHead.cnt+successfulDeqsNum};
     PtrCntOrAnn ptrAnn = toPtr(ann);
 
@@ -237,8 +238,10 @@ void UpdateHead(Ann* ann){
 }
 
 Node* GetNthNode(Node* node, uint n){
-    for (int i = 0; i <  n; i++)
+    for (int i = 0; i <  n; i++){
+        //std::cout << "ann " << node << std::endl;
         node = node->next.load();
+    }
     return node;
 }
 
@@ -321,25 +324,27 @@ int main(){
     enqueue(b);
     enqueue(c);
     
-    Future* f[8];
+    Future* f[6];
     
     f[0] = futureDeq();
     f[1] = futureDeq();
     f[2] = futureDeq();
-    f[3] = futureDeq();
     futureEnq(a);
+    f[3] = futureDeq();
     f[4] = futureDeq();
     futureEnq(b);
+    f[5] = futureDeq();
+    /*
     futureEnq(b);
     f[5] = futureDeq();
     f[6] = futureDeq();
     f[7] = futureDeq();
-    
+    */
     execute();
     
     std::cout << std::endl;
     
-    for (Future* i : f)
-        std::cout << i->result << std::endl;   
+     for (Future* i : f)
+         std::cout << i->result << std::endl;   
     
 }

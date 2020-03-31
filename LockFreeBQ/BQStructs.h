@@ -45,6 +45,7 @@ struct Ann {
     Ann(BatchRequest newB, PtrCnt tail){
         batchReq = newB;
         oldTail = tail;
+        oldTail.node = NULL;
     }
 };
 
