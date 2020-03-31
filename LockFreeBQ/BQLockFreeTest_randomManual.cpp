@@ -10,21 +10,21 @@
 #include <iostream>
 #include <vector>
 
-#define TESTING_VALUE_RANGE 10
-
 void doBatch(int numOps) {
-    for(j = 0; j < numOpsPerBatch; j++) {
+    int i;
+    
+    for(i = 0; i < numOps; i++) {
         if(rand() % 2 == 0)
-            testFutureEnq(rand() % TESTING_VALUE_RANGE);
+            futureEnq(rand());
         else
-            deqs.push_back(testFutureDeq());
+            futureDeq();
     }
     
     execute();
 }
 
 void test(int numBatches, int numOpsPerBatch) {
-    int i, j;
+    int i;
     
     for(i = 0; i < numBatches; i++) {
         switch(rand() % 3) {
@@ -58,12 +58,14 @@ void threadTest(int numThreads, int numBatchesPerThread, int numOpsPerBatch){
     std::cout << "Time taken for " << numThreads 
               << " threads with " << numBatchesPerThread 
               << " operations or batches each, over " << numBatchesPerThread
-              << " batches: " << std::fixed << time_taken
+              << " batches: " << std::fixed << totalTime
               << " microsec" << std::endl;
 }
 
-void main() {
+int main(void) {
     int i = 0;
     for (i = 1; i <= 4; i++)
         threadTest(i, 75, 10);
+    
+    return 0;
 }
