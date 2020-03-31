@@ -33,7 +33,7 @@ void init();
 void resetThread();
 
 //Helpers for the garbage that is C++ Unions and Strict Typing
-PtrCntOrAnn toPtr(Ann*& ann){
+PtrCntOrAnn toPtr(Ann* ann){
     PtrCntOrAnn toReturn;
     toReturn.container.tag = 1;
     toReturn.container.ann = ann;
@@ -112,6 +112,7 @@ void execute(){
     
     BatchRequest bq {threadData.enqsHead,
 	 threadData.enqsTail,
+	 threadData.enqsNum,
 	 threadData.deqsNum,
 	 threadData.excessDeqsNum};
     
@@ -134,7 +135,7 @@ void EnqueueToShared(void* item){
             break;
         }
         PtrCntOrAnn head = SQHead;
-        if (head.container.tag & 1 == 1)
+        if ((head.container.tag & 1) == 1)
             ExecuteAnn(head.container.ann);
         else{
             PtrCnt newTail {tailAndCnt.node->next.load(),tailAndCnt.cnt + 1};
@@ -154,6 +155,7 @@ void* DequeueFromShared(){
         if (SQHead.CAS(oldHead,toPtr(newHead)))
             return headNextNode->item;
     }
+   
 }
 PtrCnt HelpAnnAndGetHead(){
     while (true){
@@ -215,7 +217,6 @@ void UpdateHead(Ann* ann){
    
     uint oldQueueSize = ann->oldTail.cnt - ann->oldHead.cnt;
     uint successfulDeqsNum = ann->batchReq.deqsNum;
-   
     Node* newHeadNode;
     
     if (ann->batchReq.excessDeqsNum > oldQueueSize)
@@ -225,7 +226,8 @@ void UpdateHead(Ann* ann){
         PtrCntOrAnn newHead = toPtr(ann->oldHead);
         SQHead.CAS(ptrAnn,newHead);
         return;
-    } 
+    }
+  
     if(oldQueueSize > successfulDeqsNum)
         newHeadNode = GetNthNode(ann->oldHead.node,successfulDeqsNum);
     else{
@@ -233,13 +235,13 @@ void UpdateHead(Ann* ann){
     }
     PtrCnt newHead {newHeadNode,ann->oldHead.cnt+successfulDeqsNum};
     PtrCntOrAnn ptrAnn = toPtr(ann);
+    
+    SQHead.CAS( ptrAnn, toPtr(newHead));
 
-    SQHead.CAS( ptrAnn, toPtr(newHead));    
 }
 
 Node* GetNthNode(Node* node, uint n){
     for (int i = 0; i <  n; i++){
-        //std::cout << "ann " << node << std::endl;
         node = node->next.load();
     }
     return node;
@@ -319,22 +321,25 @@ int main(){
     std::cout << a << std::endl;
     std::cout << b << std::endl;
     std::cout << c << std::endl;
-    
+
+    enqueue(a);
     enqueue(a);
     enqueue(b);
     enqueue(c);
+
+    dequeue();
     
-    Future* f[6];
-    
+    Future* f[5];
+
+    //    futureEnq(a);
     f[0] = futureDeq();
     f[1] = futureDeq();
     f[2] = futureDeq();
-    futureEnq(a);
     f[3] = futureDeq();
     f[4] = futureDeq();
-    futureEnq(b);
+    /*futureEnq(c);
     f[5] = futureDeq();
-    /*
+    futureEnq(a);
     futureEnq(b);
     f[5] = futureDeq();
     f[6] = futureDeq();
@@ -344,7 +349,10 @@ int main(){
     
     std::cout << std::endl;
     
-     for (Future* i : f)
-         std::cout << i->result << std::endl;   
+    for (Future* i : f)
+        std::cout << i->result << std::endl;   
+    
+    std::cout << dequeue() << std::endl;
+
     
 }

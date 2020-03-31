@@ -34,7 +34,7 @@ struct BatchRequest{
 
 struct PtrCnt{
   Node* node;
-  unsigned int cnt;
+  uintptr_t cnt;
 };
 
 struct Ann {
@@ -52,7 +52,7 @@ struct Ann {
 union PtrCntOrAnn {
   PtrCnt ptrCnt;
   struct {
-    unsigned int tag;
+    uintptr_t tag;
     Ann* ann;
   } container;    
 };
