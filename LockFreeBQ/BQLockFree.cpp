@@ -107,9 +107,6 @@ Future* futureDeq(){
     
 }
 void execute(){
-
-    std::cout << "Enquing " << threadData.enqsNum << std::endl;
-    
     
     Node* oldHead = HelpAnnAndGetHead().node;
     
@@ -285,12 +282,10 @@ void PairFuturesWithResults(Node* oldHeadNode){
                     noMoreSuccessfulDeqs = true;
                 
                 op->future->result = currentHead->item;
-                delete lastHead;
                 
             }
         }   
         op->future->isDone = true;
-        delete op;
     }
 }
 
