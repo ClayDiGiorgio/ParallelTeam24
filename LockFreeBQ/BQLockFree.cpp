@@ -460,22 +460,16 @@ double runTest(const int numThreads, int numOpsPerThread, int numOpsPerBatch) {
 int main(void) {
     srand(time(NULL));
     const int averageOver = 10;
-    const int threadCounts[] = {1 , 2, 3, 4};
-    const int numTests = 4; // must be length of above array
+    const int numTests = 4; 
     double temp;
     int t, i;
-    
-//     std::cout << "testing on 2\n";
-//     runTest(2, 75, 10);
-//     
-//     std::cout << "ending test on 2\n";
     
     std::cout << "Num Threads\t"<<std::fixed<<"Time Taken (microseconds)" << std::endl;
     std::cout << "-----------------------------------------" << std::endl;
     for (t = 0; t < numTests; t++) {
         temp = 0;
         for (i = 0; i < averageOver; i++)
-            temp += runTest(threadCounts[t], 20000, 30) / (double)averageOver;
-        std::cout << "          " << threadCounts[t] << ":\t" << std::fixed << temp << std::endl;
+            temp += runTest(t+1, 20000, 30) / (double)averageOver;
+        std::cout << "          " << t+1 << ":\t" << std::fixed << temp << std::endl;
     }
 }

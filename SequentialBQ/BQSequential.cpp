@@ -207,8 +207,8 @@ void init(){
 	SQHead.node = sentinal;
 }
 
-void performBatch(int** values) {
-	for(int i = 0; i < 10; i++) {
+void performBatch(int** values, int numOps) {
+	for(int i = 0; i < numOps; i++) {
 		switch(rand() % 2) {
 			case 0:
 				futureDeq();
@@ -221,10 +221,11 @@ void performBatch(int** values) {
 	execute();
 }
 
-int main() {
+
+double runTest(const int numThreads, int numOpsPerThread, int numOpsPerBatch) {
 
 	const int valNum = 10;
-	const int numThreads = 4;
+    const int numOps = numThreads * numOpsPerThread;
 
 	auto start = std::chrono::high_resolution_clock::now();
 
@@ -239,9 +240,9 @@ int main() {
 		enqueue(values[rand() % 10]);
 	}
 
-	for(int i = 0; i < 300; i++) {
+	for(int i = 0; i < numOps; i++) {
 		int operation = rand() % 4;
-		int* value = values[rand() % 10];
+		int* value = values[rand() % valNum];
 		switch(rand() % 4) {
 			case 0:
 				enqueue(value);
@@ -250,7 +251,7 @@ int main() {
 				dequeue();
 				break;
 			case 2:
-				performBatch(values);
+				performBatch(values, numOpsPerBatch);
 				break;
 		}
 	}
@@ -260,8 +261,27 @@ int main() {
 	double time_taken =
 		std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
 
-	std::cout << "Time taken by program is : " << std::fixed
-		<< time_taken;
-	std::cout << " microsec" << std::endl;
+// 	std::cout << "Time taken by program is : " << std::fixed
+// 		<< time_taken;
+// 	std::cout << " microsec" << std::endl;
+        
+    return time_taken;
 
+}
+
+int main(void) {
+    srand(time(NULL));
+    const int averageOver = 10;
+    const int numTests = 4; 
+    double temp;
+    int t, i;
+    
+    std::cout << "Num Ops Multiplier\t"<<std::fixed<<"Time Taken (microseconds)" << std::endl;
+    std::cout << "-----------------------------------------" << std::endl;
+    for (t = 0; t < numTests; t++) {
+        temp = 0;
+        for (i = 0; i < averageOver; i++)
+            temp += runTest(t+1, 20000, 30) / (double)averageOver;
+        std::cout << "          " << t+1 << ":\t" << std::fixed << temp << std::endl;
+    }
 }
