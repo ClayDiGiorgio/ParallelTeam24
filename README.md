@@ -1,10 +1,26 @@
 # ParallelTeam24
 
+
+-----------------------------
+=== A Note on Our Testing ===    
+-----------------------------
+
+The included report is based on the old method of tests
+(which can be seen in BQLockFree_OldTests.cpp).
+The current versions of BQLockFree.cpp, BQLocked.cpp, 
+and BQSequential.cpp are under development and do not
+currently work. 
+
+The old methods of testing can be compiled with the same
+commands as the in-development ones, though replacing, 
+for example, `BQLockFree.cpp` with `BQLockFree_OldTests.cpp`
+
+
      =============================
      |-~-~-~-~-~-~-~-~-~-~-~-~-~-|
      |                           |
      |   Running and Compiling   |
-     |    The Benchmark Test     |
+     |    The Benchmark Tests    |
      |                           |
      |-~-~-~-~-~-~-~-~-~-~-~-~-~-|
      =============================
