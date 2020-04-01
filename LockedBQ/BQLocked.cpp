@@ -313,14 +313,9 @@ double runTest(const int numThreads, int numOpsPerThread, int numOpsPerBatch) {
 int main(void) {
 	srand(time(NULL));
 	const int averageOver = 10;
-	const int numTests = 32;
+	const int numTests = 4;
 	double temp;
 	int t, i;
-
-	//     std::cout << "testing on 2\n";
-	//     runTest(2, 75, 10);
-	//     
-	//     std::cout << "ending test on 2\n";
 
 	std::cout << "Num Threads\t" << std::fixed << "Time Taken (microseconds)" << std::endl;
 	std::cout << "-----------------------------------------" << std::endl;
