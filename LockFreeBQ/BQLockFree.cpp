@@ -6,7 +6,7 @@
 
 thread_local ThreadData threadData;
 std::atomic <PtrCntOrAnn> SQHead;
-std::atomic <PtrCntOrAnn> SQTail;
+std::atomic <PtrCnt> SQTail;
 
 //Public Functions
 void enqueue(void * item);
@@ -107,20 +107,22 @@ Future* futureDeq(){
     
 }
 void execute(){
-    
-    Node* oldHead = HelpAnnAndGetHead().node;
-    
-    BatchRequest bq {threadData.enqsHead,
-	 threadData.enqsTail,
-	 threadData.enqsNum,
-	 threadData.deqsNum,
-	 threadData.excessDeqsNum};
 
     if(threadData.enqsNum == 0){
         UIntNode res = ExecuteDeqsBatch();
         PairFutureDeqsWithResults(res.node,res.num);
     }
     else{
+
+            
+        Node* oldHead = HelpAnnAndGetHead().node;
+        
+        BatchRequest bq {threadData.enqsHead,
+	     threadData.enqsTail,
+	     threadData.enqsNum,
+	     threadData.deqsNum,
+	     threadData.excessDeqsNum};
+        
         ExecuteBatch(bq);
         PairFuturesWithResults(oldHead);
     }
@@ -131,13 +133,15 @@ void execute(){
 void EnqueueToShared(void* item){
     
     Node* newNode = new Node(item,NULL);
+    Node* empty;
+    PtrCnt tailAndCnt;
+    
     while(true){
-        PtrCnt tailAndCnt = SQTail.load().ptrCnt;
-        PtrCntOrAnn oldTail = toPtr(tailAndCnt);
-        Node* empty = NULL;
+        tailAndCnt = SQTail.load();
+        empty = NULL;
         if (tailAndCnt.node->next.CAS(empty,newNode)){
             PtrCnt newTail {newNode,tailAndCnt.cnt + 1};
-            SQTail.CAS(oldTail,toPtr(newTail));
+            SQTail.CAS(tailAndCnt,newTail);
             break;
         }
         PtrCntOrAnn head = SQHead;
@@ -145,7 +149,7 @@ void EnqueueToShared(void* item){
             ExecuteAnn(head.container.ann);
         else{
             PtrCnt newTail {tailAndCnt.node->next.load(),tailAndCnt.cnt + 1};
-            SQTail.CAS(oldTail,toPtr(newTail));
+            SQTail.CAS(tailAndCnt,newTail);
         }
     }
 }
@@ -194,14 +198,15 @@ Node* ExecuteBatch(BatchRequest batchRequest){
 
 void ExecuteAnn(Ann* ann){
     PtrCnt tailAndCnt, annOldTailAndCnt;
+    Node* empty;
     while (true){
-        tailAndCnt = SQTail.load().ptrCnt;
+        tailAndCnt = SQTail.load();
         annOldTailAndCnt = ann->oldTail.load();
 
         if (annOldTailAndCnt.node != NULL)
             break;
 
-        Node* empty = NULL;
+        empty = NULL;
         tailAndCnt.node->next.CAS(empty,ann->batchReq.firstEnq);
 
         if (tailAndCnt.node->next.load() == ann->batchReq.firstEnq){
@@ -211,13 +216,11 @@ void ExecuteAnn(Ann* ann){
         }
         else{
             PtrCnt newTail {tailAndCnt.node->next,tailAndCnt.cnt + 1};
-            PtrCntOrAnn oldTail = toPtr(annOldTailAndCnt);
-            SQTail.CAS(oldTail,toPtr(newTail));
+            SQTail.CAS(annOldTailAndCnt,newTail);
         }
     }
     PtrCnt newTailAndCnt {ann->batchReq.lastEnq,annOldTailAndCnt.cnt + ann->batchReq.enqsNum};
-    PtrCntOrAnn oldTail = toPtr(annOldTailAndCnt);
-    SQTail.CAS(oldTail,toPtr(newTailAndCnt));
+    SQTail.CAS(annOldTailAndCnt,newTailAndCnt);
     UpdateHead(ann);
 }
 
@@ -349,14 +352,15 @@ void resetThread(){
 
 void init(){
 
-    PtrCntOrAnn newHead, newTail;
+    PtrCntOrAnn newHead;
+    PtrCnt newTail;
 
     newHead.ptrCnt.cnt = 0;
-    newTail.ptrCnt.cnt = 0;
+    newTail.cnt = 0;
     
     Node* sentinal = new Node(0,NULL);
     
-    newTail.ptrCnt.node = sentinal;
+    newTail.node = sentinal;
     newHead.ptrCnt.node = sentinal;
 
     SQHead.store(newHead);
@@ -460,7 +464,7 @@ int main(void) {
     for (t = 0; t < numTests; t++) {
         temp = 0;
         for (i = 0; i < averageOver; i++)
-            temp += runTest(threadCounts[t], 75, 10) / (double)averageOver;
+            temp += runTest(threadCounts[t], 20000, 30) / (double)averageOver;
         std::cout << "          " << threadCounts[t] << ":\t" << std::fixed << temp << std::endl;
     }
 }
