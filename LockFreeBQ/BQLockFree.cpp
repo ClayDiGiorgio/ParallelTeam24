@@ -380,37 +380,48 @@ void init(){
 #include <stdlib.h>   
 #include <time.h> 
 #include <cstddef>
-
-void performBatch(int** values, int numOps) {
-    for(int i = 0; i < numOps; i++) {
-        switch(rand() % 2) {
-            case 0:
-                futureDeq();
-                break;
-            case 1:
-                futureEnq(values[rand() % 10]);
-                break;
-        }
-    }
-    execute();
-}
+#include <random>
+#include <assert.h>
 
 void test(int** values, int numOpsPerThread, int numOpsPerBatch) {
+
+	//random number generator
+	std::random_device rdev;
+	std::mt19937 rng(rdev());
+	std::uniform_real_distribution<double> dist(0,1);
+
+	//initialize percentages of operations - must add to 1.0
+	double enqpercent = 0.01;
+	double deqpercent = 0.01;
+	double fenqpercent = 0.49;
+	double fdeqpercent = 0.49;
+
+	//set max value for each percentage range
+	double enqmark = enqpercent;
+	double deqmark = enqmark + deqpercent;
+	double fenqmark = deqmark + fenqpercent;
+	double fdeqmark = fenqmark + fdeqpercent;
+
+	//ensure percentages add up to 1.0
+	assert(fdeqmark == 1.0);
+
+	//test random operations
     for(int i = 0; i < numOpsPerThread; i++) {
+		double randNum = dist(rng);
         int operation = rand() % 4;
         int* value = values[rand() % 10];
-        switch(rand() % 4) {
-            case 0:
-                enqueue(value);
-                break;
-            case 1:
-                dequeue();
-                break;
-            case 2:
-                performBatch(values, numOpsPerBatch);
-                break;
-        }
+
+		if(randNum < enqmark) {
+			enqueue(value);
+		} else if(randNum < deqmark) {
+			dequeue();
+		} else if(randNum < fenqmark) {
+			futureEnq(value);
+		} else if(randNum < fdeqmark) {
+			futureDeq();
+		}
     }
+	execute();
     return;
 }
 
