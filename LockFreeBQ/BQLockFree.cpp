@@ -391,10 +391,10 @@ void test(int** values, int numOpsPerThread, int numOpsPerBatch) {
 	std::uniform_real_distribution<double> dist(0,1);
 
 	//initialize percentages of operations - must add to 1.0
-	double enqpercent = 0.01;
-	double deqpercent = 0.01;
-	double fenqpercent = 0.49;
-	double fdeqpercent = 0.49;
+	double enqpercent = 0.50;
+	double deqpercent = 0.50;
+	double fenqpercent = 0;
+	double fdeqpercent = 0;
 
 	//set max value for each percentage range
 	double enqmark = enqpercent;
@@ -460,8 +460,7 @@ double runTest(const int numThreads, int numOpsPerThread, int numOpsPerBatch) {
 int main(void) {
     srand(time(NULL));
     const int averageOver = 10;
-    const int threadCounts[] = {1 , 2, 3, 4};
-    const int numTests = 4; // must be length of above array
+    const int numTests = 32;
     double temp;
     int t, i;
     
@@ -475,7 +474,7 @@ int main(void) {
     for (t = 0; t < numTests; t++) {
         temp = 0;
         for (i = 0; i < averageOver; i++)
-            temp += runTest(threadCounts[t], 20000, 30) / (double)averageOver;
-        std::cout << "          " << threadCounts[t] << ":\t" << std::fixed << temp << std::endl;
+            temp += runTest(t+1, 20000, 30) / (double)averageOver;
+        std::cout << "          " << t+1 << ":\t" << std::fixed << temp << std::endl;
     }
 }
