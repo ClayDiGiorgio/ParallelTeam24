@@ -33,28 +33,26 @@ void resetThread();
 
 
 void enqueue(void * item) {
-	uint32_t index = (*lock).Lock(TAIL);
 
 	if(threadData.opsQ.empty()) {
 		Node* newNode = new Node(item, NULL);
+		uint32_t index = (*lock).Lock(TAIL);
 		SQTail.node->next = newNode;
 		SQTail.node = newNode;
 		SQTail.cnt++;
 		(*lock).Unlock(index);
 	} else {
 		futureEnq(item);
-		(*lock).Unlock(index);
 		execute();
 	}
 
 }
 void * dequeue() {
 
-	uint32_t index = (*lock).Lock(HEAD);
 	void* result;
 
 	if(threadData.opsQ.empty()) {
-
+		uint32_t index = (*lock).Lock(HEAD);
 		Node* oldHead = SQHead.node;
 		Node* headNextNode = oldHead->next;
 
@@ -67,17 +65,11 @@ void * dequeue() {
 		SQHead.node = headNextNode;
 		SQHead.cnt++;
 
-		delete oldHead;
-
 		(*lock).Unlock(index);
 	} else {
-
 		Future* future = futureDeq();
-		(*lock).Unlock(index);
 		execute();
 		result = future->result;
-
-		delete future;
 	}
 
 	return result;
@@ -128,11 +120,14 @@ void executeBatch() {
 
 	PtrCnt oldHead = SQHead;
 	PtrCnt oldTail = SQTail;
+	assert(SQHead.cnt <= SQTail.cnt);
 	unsigned int oldQueueSize = SQTail.cnt - SQHead.cnt;
 
-	SQTail.node->next = threadData.enqsHead;
-	SQTail.node = threadData.enqsTail;
-	SQTail.cnt += threadData.enqsNum;
+	if(threadData.enqsNum > 0) {
+		SQTail.node->next = threadData.enqsHead;
+		SQTail.node = threadData.enqsTail;
+		SQTail.cnt += threadData.enqsNum;
+	}
 
 	updateHead(oldHead, oldTail, oldQueueSize);
 
@@ -142,7 +137,7 @@ void updateHead(PtrCnt oldHead, PtrCnt oldTail, int oldSize) {
 
 	unsigned int successfullDeqsNum = threadData.deqsNum;
 	if(threadData.excessDeqsNum > oldSize) {
-		successfullDeqsNum -= threadData.excessDeqsNum - oldSize;
+		successfullDeqsNum -= (threadData.excessDeqsNum - oldSize);
 	}
 
 	if(successfullDeqsNum == 0)
@@ -190,13 +185,11 @@ void pairFuturesWithResults(Node* oldHeadNode) {
 					noMoreSuccessfulDeqs = true;
 
 				op->future->result = currentHead->item;
-				delete lastHead;
 
 			}
 		}
 
 		op->future->isDone = true;
-		delete op;
 	}
 }
 
