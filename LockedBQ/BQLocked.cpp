@@ -2,12 +2,10 @@
 #include "mrlock.h"
 #include "bitset.h"
 #include <iostream>
-#include <chrono>
 #include <thread> 
 #include <stdio.h> 
 #include <stdlib.h>   
 #include <time.h> 
-#include <cstddef>
 #include <vector>
 
 thread_local ThreadData threadData;
@@ -36,19 +34,19 @@ void resetThread();
 
 void enqueue(void * item) {
 	uint32_t index = (*lock).Lock(TAIL);
-	//std::cout << "Lock TAIL" << std::endl;
 
 	if(threadData.opsQ.empty()) {
 		Node* newNode = new Node(item, NULL);
 		SQTail.node->next = newNode;
 		SQTail.node = newNode;
 		SQTail.cnt++;
+		(*lock).Unlock(index);
 	} else {
 		futureEnq(item);
+		(*lock).Unlock(index);
 		execute();
 	}
 
-	(*lock).Unlock(index);
 }
 void * dequeue() {
 
@@ -70,16 +68,18 @@ void * dequeue() {
 		SQHead.cnt++;
 
 		delete oldHead;
+
+		(*lock).Unlock(index);
 	} else {
 
 		Future* future = futureDeq();
+		(*lock).Unlock(index);
 		execute();
 		result = future->result;
 
 		delete future;
 	}
 
-	(*lock).Unlock(index);
 	return result;
 
 }
@@ -221,57 +221,80 @@ void init() {
 	SQHead.node = sentinal;
 }
 
-void performBatch(int** values, int numOps) {
-	for(int i = 0; i < numOps; i++) {
-		switch(rand() % 2) {
-			case 0:
-				futureDeq();
-				break;
-			case 1:
-				futureEnq(values[rand() % 10]);
-				break;
+// =========================
+//
+//       Testing
+//
+// =========================
+
+#include <chrono>
+#include <thread> 
+#include <stdio.h> 
+#include <stdlib.h>   
+#include <time.h> 
+#include <cstddef>
+#include <random>
+#include <assert.h>
+
+void test(int** values, int numOpsPerThread, int numOpsPerBatch) {
+
+	//random number generator
+	std::random_device rdev;
+	std::mt19937 rng(rdev());
+	std::uniform_real_distribution<double> dist(0, 1);
+
+	//initialize percentages of operations - must add to 1.0
+	double enqpercent = 0.01;
+	double deqpercent = 0.01;
+	double fenqpercent = 0.49;
+	double fdeqpercent = 0.49;
+
+	//set max value for each percentage range
+	double enqmark = enqpercent;
+	double deqmark = enqmark + deqpercent;
+	double fenqmark = deqmark + fenqpercent;
+	double fdeqmark = fenqmark + fdeqpercent;
+
+	//ensure percentages add up to 1.0
+	assert(fdeqmark == 1.0);
+
+	//test random operations
+	for(int i = 0; i < numOpsPerThread; i++) {
+		double randNum = dist(rng);
+		int operation = rand() % 4;
+		int* value = values[rand() % 10];
+
+		if(randNum < enqmark) {
+			enqueue(value);
+		} else if(randNum < deqmark) {
+			dequeue();
+		} else if(randNum < fenqmark) {
+			futureEnq(value);
+		} else if(randNum < fdeqmark) {
+			futureDeq();
 		}
 	}
 	execute();
-}
-
-void test(int** values, int numOps, int numOpsPerBatch) {
-	for(int i = 0; i < numOps; i++) {
-		int operation = rand() % 4;
-		int* value = values[rand() % 10];
-		switch(rand() % 4) {
-			case 0:
-				enqueue(value);
-				break;
-			case 1:
-				dequeue();
-				break;
-			case 2:
-				performBatch(values, numOpsPerBatch);
-				break;
-		}
-	}
 	return;
 }
 
-int runTest(const int numThreads, int numOpsPerThread, int numOpsPerBatch) {
-
+double runTest(const int numThreads, int numOpsPerThread, int numOpsPerBatch) {
 	const int valNum = 10;
-	
+
 	auto start = std::chrono::high_resolution_clock::now();
-	
+
 	init();
 	resetThread();
 
 	int* values[valNum];
 	for(int i = 0; i < valNum; i++) {
-		values[i] = new int((i+1) * 10);
+		values[i] = new int((i + 1) * 10);
 	}
 	for(int i = 0; i < 100; i++) {
 		enqueue(values[rand()%valNum]);
 	}
 
-	std::thread threads[4];
+	std::thread threads[numThreads];
 	for(int i = 0; i < numThreads; i++) {
 		threads[i] = std::thread(test, values, numOpsPerThread, numOpsPerBatch);
 	}
@@ -279,33 +302,32 @@ int runTest(const int numThreads, int numOpsPerThread, int numOpsPerBatch) {
 		threads[i].join();
 	}
 
-	std::cout << std::endl;
-
 	auto end = std::chrono::high_resolution_clock::now();
 
 	double time_taken =
 		std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
 
-// 	std::cout << "Time taken by program is : " << std::fixed
-// 		<< time_taken;
-// 	std::cout << " microsec" << std::endl;
-
-    return time_taken;
+	return time_taken;
 }
 
 int main(void) {
-    srand(time(NULL));
-    const int averageOver = 10;
-    const int numTests = 4;
-    double temp;
-    int t, i;
-    
-    std::cout << "Num Threads\t"<<std::fixed<<"Time Taken (microseconds)" << std::endl;
-    std::cout << "-----------------------------------------" << std::endl;
-    for (t = 0; t < numTests; t++) {
-        temp = 0;
-        for (i = 0; i < averageOver; i++)
-            temp += runTest(t+1, 20000, 30) / (double)averageOver;
-        std::cout << "          " << t+1 << ":\t" << std::fixed << temp << std::endl;
-    }
+	srand(time(NULL));
+	const int averageOver = 10;
+	const int numTests = 32;
+	double temp;
+	int t, i;
+
+	//     std::cout << "testing on 2\n";
+	//     runTest(2, 75, 10);
+	//     
+	//     std::cout << "ending test on 2\n";
+
+	std::cout << "Num Threads\t" << std::fixed << "Time Taken (microseconds)" << std::endl;
+	std::cout << "-----------------------------------------" << std::endl;
+	for(t = 0; t < numTests; t++) {
+		temp = 0;
+		for(i = 0; i < averageOver; i++)
+			temp += runTest(t + 1, 100, 30) / (double) averageOver;
+		std::cout << "          " << t + 1 << ":\t" << std::fixed << temp << std::endl;
+	}
 }

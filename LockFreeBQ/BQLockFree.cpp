@@ -391,10 +391,10 @@ void test(int** values, int numOpsPerThread, int numOpsPerBatch) {
 	std::uniform_real_distribution<double> dist(0,1);
 
 	//initialize percentages of operations - must add to 1.0
-	double enqpercent = 0.01;
-	double deqpercent = 0.01;
-	double fenqpercent = 0.49;
-	double fdeqpercent = 0.49;
+	double enqpercent = 0.50;
+	double deqpercent = 0.50;
+	double fenqpercent = 0;
+	double fdeqpercent = 0;
 
 	//set max value for each percentage range
 	double enqmark = enqpercent;
