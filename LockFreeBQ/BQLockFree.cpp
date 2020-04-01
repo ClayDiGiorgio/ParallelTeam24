@@ -8,8 +8,6 @@ thread_local ThreadData threadData;
 std::atomic <PtrCntOrAnn> SQHead;
 std::atomic <PtrCntOrAnn> SQTail;
 
-Node* EMPTY = NULL;
-
 //Public Functions
 void enqueue(void * item);
 void* dequeue();
@@ -27,6 +25,8 @@ void ExecuteAnn(Ann* ann);
 void UpdateHead(Ann* ann);
 void PairFuturesWithResults(Node* oldHead);
 Node* GetNthNode(Node* node, uint n);
+UIntNode ExecuteDeqsBatch();
+void PairFutureDeqsWithResults(Node* oldHEadNode, uint successfulDeqsNum);
 
 //Initializers
 void init();
@@ -107,18 +107,26 @@ Future* futureDeq(){
     
 }
 void execute(){
+
+    std::cout << "Enquing " << threadData.enqsNum << std::endl;
     
-    Node* oldHead = SQHead.load().ptrCnt.node;
+    
+    Node* oldHead = HelpAnnAndGetHead().node;
     
     BatchRequest bq {threadData.enqsHead,
-     threadData.enqsTail,
-     threadData.enqsNum,
-     threadData.deqsNum,
-     threadData.excessDeqsNum};
-    
-    ExecuteBatch(bq);
-    PairFuturesWithResults(oldHead);
-    
+	 threadData.enqsTail,
+	 threadData.enqsNum,
+	 threadData.deqsNum,
+	 threadData.excessDeqsNum};
+
+    if(threadData.enqsNum == 0){
+        UIntNode res = ExecuteDeqsBatch();
+        PairFutureDeqsWithResults(res.node,res.num);
+    }
+    else{
+        ExecuteBatch(bq);
+        PairFuturesWithResults(oldHead);
+    }
     resetThread();
 
 }
@@ -129,7 +137,8 @@ void EnqueueToShared(void* item){
     while(true){
         PtrCnt tailAndCnt = SQTail.load().ptrCnt;
         PtrCntOrAnn oldTail = toPtr(tailAndCnt);
-        if (tailAndCnt.node->next.CAS(EMPTY,newNode)){
+        Node* empty = NULL;
+        if (tailAndCnt.node->next.CAS(empty,newNode)){
             PtrCnt newTail {newNode,tailAndCnt.cnt + 1};
             SQTail.CAS(oldTail,toPtr(newTail));
             break;
@@ -171,13 +180,13 @@ PtrCnt HelpAnnAndGetHead(){
 
 Node* ExecuteBatch(BatchRequest batchRequest){
     
-    Ann* ann = new Ann(batchRequest,SQTail.load().ptrCnt);
+    Ann* ann = new Ann(batchRequest);
     PtrCnt oldHeadAndCnt;
 
     while(true){
         oldHeadAndCnt = HelpAnnAndGetHead();
-        ann->oldHead = oldHeadAndCnt;
-        PtrCntOrAnn oldPtr = toPtr(oldHeadAndCnt);
+        ann->oldHead.store(oldHeadAndCnt);
+        PtrCntOrAnn oldPtr = toPtr(ann->oldHead.load());
         if (SQHead.CAS(oldPtr,toPtr(ann)))
             break;
     }
@@ -190,15 +199,17 @@ void ExecuteAnn(Ann* ann){
     PtrCnt tailAndCnt, annOldTailAndCnt;
     while (true){
         tailAndCnt = SQTail.load().ptrCnt;
-        annOldTailAndCnt = ann->oldTail;
+        annOldTailAndCnt = ann->oldTail.load();
 
         if (annOldTailAndCnt.node != NULL)
             break;
 
-        tailAndCnt.node->next.CAS(EMPTY,ann->batchReq.firstEnq);
+        Node* empty = NULL;
+        tailAndCnt.node->next.CAS(empty,ann->batchReq.firstEnq);
 
-        if (tailAndCnt.node->next == ann->batchReq.firstEnq){
-            ann->oldTail = annOldTailAndCnt = tailAndCnt;
+        if (tailAndCnt.node->next.load() == ann->batchReq.firstEnq){
+            annOldTailAndCnt = tailAndCnt;
+            ann->oldTail.store(tailAndCnt);
             break;
         }
         else{
@@ -215,7 +226,7 @@ void ExecuteAnn(Ann* ann){
 
 void UpdateHead(Ann* ann){
    
-    uint oldQueueSize = ann->oldTail.cnt - ann->oldHead.cnt;
+    uint oldQueueSize = ann->oldTail.load().cnt - ann->oldHead.load().cnt;
     uint successfulDeqsNum = ann->batchReq.deqsNum;
     Node* newHeadNode;
     
@@ -229,11 +240,11 @@ void UpdateHead(Ann* ann){
     }
   
     if(oldQueueSize > successfulDeqsNum)
-        newHeadNode = GetNthNode(ann->oldHead.node,successfulDeqsNum);
+        newHeadNode = GetNthNode(ann->oldHead.load().node,successfulDeqsNum);
     else{
-        newHeadNode = GetNthNode(ann->oldTail.node,successfulDeqsNum - oldQueueSize);
+        newHeadNode = GetNthNode(ann->oldTail.load().node,successfulDeqsNum - oldQueueSize);
     }
-    PtrCnt newHead {newHeadNode,ann->oldHead.cnt+successfulDeqsNum};
+    PtrCnt newHead {newHeadNode,ann->oldHead.load().cnt+successfulDeqsNum};
     PtrCntOrAnn ptrAnn = toPtr(ann);
     
     SQHead.CAS( ptrAnn, toPtr(newHead));
@@ -262,9 +273,9 @@ void PairFuturesWithResults(Node* oldHeadNode){
             
             if (noMoreSuccessfulDeqs ||
               
-                currentHead->next == nextEnqNode)
-                
+                currentHead->next == nextEnqNode)        
                 op->future->result = NULL;
+            
             else{
                 
                 Node* lastHead = currentHead;
@@ -282,6 +293,55 @@ void PairFuturesWithResults(Node* oldHeadNode){
         delete op;
     }
 }
+
+UIntNode ExecuteDeqsBatch(){
+    PtrCnt oldHeadAndCnt;
+    uint successfulDeqsNum;
+    while(true){
+
+        oldHeadAndCnt = HelpAnnAndGetHead();
+        Node* newHeadNode = oldHeadAndCnt.node;
+
+        successfulDeqsNum = 0;
+
+        for(int i = 0; i < threadData.deqsNum; i++){
+            Node* headNextNode = newHeadNode->next;
+            if (headNextNode == NULL)
+                break;
+            successfulDeqsNum++;
+            newHeadNode = headNextNode;
+        }
+
+        if (successfulDeqsNum == 0)
+            break;
+        PtrCnt newHead {newHeadNode,oldHeadAndCnt.cnt + successfulDeqsNum};
+        PtrCntOrAnn oldHead = toPtr(oldHeadAndCnt);
+        if (SQHead.CAS(oldHead,toPtr(newHead)))
+            break;     
+    }
+
+    UIntNode toReturn {successfulDeqsNum,oldHeadAndCnt.node};
+    return toReturn;
+    
+}
+void PairFutureDeqsWithResults(Node* oldHeadNode, uint successfulDeqsNum){
+    Node* currentHead = oldHeadNode;
+    for(int i = 0; i < successfulDeqsNum; i++){
+        currentHead = currentHead->next;
+        FutureOp* op = threadData.opsQ.front();
+        threadData.opsQ.pop();
+
+        op->future->result = currentHead->item;
+        op->future->isDone = true;
+    }
+    for(int i = 0; i < threadData.deqsNum - successfulDeqsNum; i++){
+        FutureOp* op = threadData.opsQ.front();
+        threadData.opsQ.pop();
+        op->future->result = NULL;
+        op->future->isDone = true;
+    }
+}
+
 
 void resetThread(){
     threadData.enqsHead = NULL;
@@ -390,7 +450,7 @@ double runTest(const int numThreads, int numOpsPerThread, int numOpsPerBatch) {
 int main(void) {
     srand(time(NULL));
     const int averageOver = 10;
-    const int threadCounts[] = {1, 2, 3, 4};
+    const int threadCounts[] = {1 , 2, 3, 4};
     const int numTests = 4; // must be length of above array
     double temp;
     int t, i;

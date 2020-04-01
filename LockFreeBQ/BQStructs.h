@@ -39,13 +39,16 @@ struct PtrCnt{
 
 struct Ann {
     BatchRequest batchReq;
-    PtrCnt oldHead;
-    PtrCnt oldTail;
+    std::atomic <PtrCnt> oldHead;
+    std::atomic <PtrCnt> oldTail;
     
-    Ann(BatchRequest newB, PtrCnt tail){
+    Ann(BatchRequest newB){
         batchReq = newB;
-        oldTail = tail;
-        oldTail.node = NULL;
+        PtrCnt tail {(Node*)0,40};
+        PtrCnt head {(Node*)0,40};
+
+        oldHead.store(head);
+        oldTail.store(tail);
     }
 };
 
@@ -58,13 +61,13 @@ union PtrCntOrAnn {
 };
 
 struct FutureOp{
-	Type type;
-	Future* future;
-
-	FutureOp(Type nType){
-		type = nType;
-		future = new Future();
-	}
+    Type type;
+    Future* future;
+    
+    FutureOp(Type nType){
+        type = nType;
+        future = new Future();
+    }
 };
 
 struct ThreadData {
@@ -74,4 +77,9 @@ struct ThreadData {
 	unsigned int enqsNum;
 	unsigned int deqsNum;
 	unsigned int excessDeqsNum;
+};
+
+struct UIntNode {
+    unsigned int num;
+    Node* node;
 };
