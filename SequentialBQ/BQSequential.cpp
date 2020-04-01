@@ -1,5 +1,6 @@
 #include "BQStructs.h"
 #include <iostream> 
+#include <chrono>
 
 thread_local ThreadData threadData;
 PtrCnt SQHead;
@@ -16,7 +17,7 @@ void execute();
 void executeBatch();
 void updateHead(PtrCnt oldHead, PtrCnt oldTail, int oldSize);
 void pairFuturesWithResults(Node* oldHead);
-Node* GetNthNode(Node* node, uint n);
+Node* GetNthNode(Node* node, unsigned int n);
 
 
 //Initializers
@@ -111,7 +112,7 @@ void executeBatch(){
 
 	PtrCnt oldHead = SQHead;
 	PtrCnt oldTail = SQTail;
-	uint oldQueueSize = SQTail.cnt - SQHead.cnt;
+	unsigned int oldQueueSize = SQTail.cnt - SQHead.cnt;
 
 	SQTail.node->next = threadData.enqsHead;
 	SQTail.node = threadData.enqsTail;
@@ -123,7 +124,7 @@ void executeBatch(){
 
 void updateHead(PtrCnt oldHead, PtrCnt oldTail, int oldSize){
 	
-	uint successfullDeqsNum = threadData.deqsNum;
+	unsigned int successfullDeqsNum = threadData.deqsNum;
 	if (threadData.excessDeqsNum > oldSize){
 		successfullDeqsNum -= threadData.excessDeqsNum - oldSize;
 	}
@@ -141,7 +142,7 @@ void updateHead(PtrCnt oldHead, PtrCnt oldTail, int oldSize){
 
 }
 
-Node* GetNthNode(Node* node, uint n){
+Node* GetNthNode(Node* node, unsigned int n){
 	for (int i = 0; i <  n; i++)
  		node = node->next;
 	return node;
@@ -206,45 +207,61 @@ void init(){
 	SQHead.node = sentinal;
 }
 
-int main(){
+void performBatch(int** values) {
+	for(int i = 0; i < 10; i++) {
+		switch(rand() % 2) {
+			case 0:
+				futureDeq();
+				break;
+			case 1:
+				futureEnq(values[rand() % 10]);
+				break;
+		}
+	}
+	execute();
+}
+
+int main() {
+
+	const int valNum = 10;
+	const int numThreads = 4;
+
+	auto start = std::chrono::high_resolution_clock::now();
 
 	init();
 	resetThread();
 
-	int * a = new int(10);
-	int * b = new int(20);
-	int * c = new int(30);
+	int* values[valNum];
+	for(int i = 0; i < valNum; i++) {
+		values[i] = new int((i + 1) * 10);
+	}
+	for(int i = 0; i < 100; i++) {
+		enqueue(values[rand() % 10]);
+	}
 
-	std::cout << "Adresses:" << std::endl;
-	std::cout << a << std::endl;
-	std::cout << b << std::endl;
-	std::cout << c << std::endl;
+	for(int i = 0; i < 300; i++) {
+		int operation = rand() % 4;
+		int* value = values[rand() % 10];
+		switch(rand() % 4) {
+			case 0:
+				enqueue(value);
+				break;
+			case 1:
+				dequeue();
+				break;
+			case 2:
+				performBatch(values);
+				break;
+		}
+	}
 
-	enqueue(a);
-	enqueue(b);
-	enqueue(c);
+	auto end = std::chrono::high_resolution_clock::now();
 
-	Future* f[8];
+	double time_taken =
+		std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
 
-	f[0] = futureDeq();
-	f[1] = futureDeq();
-	f[2] = futureDeq();
-	f[3] = futureDeq();
-	futureEnq(a);
-	f[4] = futureDeq();
-	futureEnq(b);
-	futureEnq(b);
-	f[5] = futureDeq();
-	f[6] = futureDeq();
-	f[7] = futureDeq();
-
-	execute();
-
-	std::cout << std::endl;
-
-	for (Future* i : f)
-		std::cout << i->result << std::endl;
-
-
+	std::cout << "Time taken by program is : " << std::fixed
+		<< time_taken;
+	std::cout << " microsec" << std::endl;
 
 }
